@@ -1,4 +1,4 @@
-Unsatisfied with current situation is this a Delphi 5 port of MongoDB's c-driver(version 1.3.4). It requires the 32bit compiled versions of libmongo.dll and mongoc.dll. Nearly untested and implements only handful features/functions.
+Unsatisfied with current situation is this a Delphi 5 port of MongoDB's c-driver(version 1.3.4). It requires the 32bit compiled versions of libmongo.dll and mongoc.dll. Nearly untested and implements only a handful features/functions.
 
 Currently missing parts:
 * many function which i don't needed
