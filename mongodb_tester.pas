@@ -50,7 +50,7 @@ begin
     doc.append_oid('_oid', oid);
     doc.append_text('hello', 'world');
     bool := collection.insert(INSERT_NONE, doc, nil, error);
-
+    mmo1.lines.append(doc.as_json);
     doc.free;
 
     doc := TBson.Create;
@@ -61,7 +61,7 @@ begin
 
     query := TBson.Create;
     cursor := collection.find(QUERY_NONE, 0, 0, 0, query, nil, nil);
-    while cursor.next(doc) do ;
+    while cursor.next(doc) do;
 
     query.free;
     cursor.free;

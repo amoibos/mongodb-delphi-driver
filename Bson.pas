@@ -379,7 +379,7 @@ end;
 
 function TBson.as_json: string;
 begin
-  Result := bson_as_json(handle, nil);
+  Result := string(bson_as_json(handle, nil));
 end;
 
 end.
