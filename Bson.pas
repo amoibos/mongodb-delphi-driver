@@ -63,6 +63,7 @@ type
      code: longint;
      message: array[0..503] of char;
    end;
+   PTBsonError = ^TBsonError;
 
    TBsonType = record
      flags: longint;
@@ -195,7 +196,7 @@ end;
 
 function TBson.concat(var destination: TBson): boolean;
 begin
-  Result := bson_concat(@destination, handle);
+  Result := bson_concat(destination.handle, handle);
 end;
 
 function TBson.copy: TBson;
@@ -233,7 +234,7 @@ end;
 
 
 
-function TBson.append_symbol(key: string; value: string): boolean; 
+function TBson.append_symbol(key: string; value: string): boolean;
 var
   utf8_key,
   utf8_value: string;
@@ -274,8 +275,11 @@ end;
 
 
 function TBson.append_array(key: string; value: TBson): boolean;
+var
+  utf8_key: string;
 begin
-
+  utf8_key := utf8_encode(key);
+  Result := bson_append_array(handle, PAnsiString(utf8_key), length(utf8_key), value.handle);
 end;
 
 

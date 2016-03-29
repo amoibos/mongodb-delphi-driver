@@ -24,7 +24,6 @@ type
   TUPDATE_FLAGS = (UPDATE_NONE, UPDATE_INSERT, UPDATE_MULTI_UPDATE);
   TINSERT_FLAGS = (INSERT_NONE, INSERT_CONTINUE_ON_ERROR);
   TREMOVE_FLAGS = (REMOVE_NONE, REMOVE_SINGLE_REMOVE);
-  TDELETE_FLAGS = (DELETE_NONE, DELETE_SINGLE_REMOVE);
 
   TMongoCursor = class
     handle: pointer;
@@ -74,9 +73,17 @@ type
   end;
   PTWriteConcern= ^TWriteConcern;
 
+  TReadConcern = packed record
+
+  end;
+  PTReadConcern = ^TReadConcern;
+
 
   TMongoCollection = class
     handle: Pointer;
+    connection: TMongoClient;
+    database: string;
+    collection: string;
     constructor Create(connection: TMongoClient; database: string; collection: string);
     destructor Destroy; override;
 
@@ -85,13 +92,24 @@ type
     function drop_index(const name: string; var error: TBsonError): boolean;
 
     function get_name: string;
+    function get_last_error: TBson;
 
-    function find(flag: TQUERY_FLAGS; skip: longint; limit: longint; batch_size: longint; query: TBson; fields: TBson; read_prefs: PTReadPrefs): TMongoCursor;
+    function find(flag: TQUERY_FLAGS; skip: longint; limit: longint; batch_size: longint; const query: TBson; const fields: TBson; read_prefs: PTReadPrefs): TMongoCursor;
+    function find_indexes(var error: TBsonError): TMongoCursor;
     function count(flag: TQUERY_FLAGS; const query: TBson; skip: int64; limit: int64; read_prefs: PTReadPrefs): int64;
 
     function update(flag: TUPDATE_FLAGS; const selector: TBson; const update: TBson; const write_concern: PTWriteConcern; var error: TBsonError): boolean;
     function insert(flag: TINSERT_FLAGS; const document: TBson; const write_concern: PTWriteConcern; var error: TBsonError): boolean;
-    function delete(flag: TDELETE_FLAGS; const selector: TBson; const write_concern: PTWriteConcern; var error: TBsonError): boolean;
+    function remove(flag: TREMOVE_FLAGS; const selector: TBson; const write_concern: PTWriteConcern; var error: TBsonError): boolean;
+
+    function rename(const new_db: string; const new_name: string; drop_target_before_rename: boolean; var error: TBsonError): boolean;
+    function save(const document: TBson; const write_concern: PTWriteConcern; var error: TBsonError): boolean;
+
+    function copy: TMongoCollection;
+    function command_simple(const command: TBson; const read_prefs: PTReadPrefs; var reply: TBson; var error: TBsonError): boolean;
+
+    function validate(const options: TBSon; var reply: TBson; var error: TBsonError): boolean;
+    function stats(const options: TBson; var reply: TBson; var error: TBsonError): boolean;
   end;
 
 implementation
@@ -122,23 +140,33 @@ function mongo_client_get_collection(client: Pointer; database: PAnsiString; col
 
 procedure mongo_collection_destroy(collection: Pointer); cdecl; external MongoDll name 'mongoc_collection_destroy';
 function mongo_collection_find(collection: Pointer; flag: integer; skip: longint; limit: longint; batch_size: longint; query: Pointer; fields: Pointer; read_prefs: PTReadPrefs): TMongoCursor;  cdecl; external MongoDll name 'mongoc_collection_find';
-function mongo_collection_drop(collection: Pointer; error: Pointer): boolean;   cdecl; external MongoDll name 'mongoc_collection_drop';
-function mongo_collection_drop_index(collection: Pointer; const name: PAnsiString; error: Pointer): boolean; cdecl; external MongoDll name 'mongoc_collection_drop_index';
-function mongo_collection_create_index(collection: Pointer; const keys: Pointer; opt: Pointer; error: Pointer): boolean; cdecl; external MongoDll name 'mongoc_collection_create_index';
+function mongo_collection_drop(collection: Pointer; error: PTBsonError): boolean;   cdecl; external MongoDll name 'mongoc_collection_drop';
+function mongo_collection_drop_index(collection: Pointer; const name: PAnsiString; error: PTBsonError): boolean; cdecl; external MongoDll name 'mongoc_collection_drop_index';
+function mongo_collection_create_index(collection: Pointer; const keys: Pointer; opt: Pointer; error: PTBsonError): boolean; cdecl; external MongoDll name 'mongoc_collection_create_index';
 function mongo_collection_get_name(collection: Pointer): AnsiString; cdecl; external MongoDll name 'mongoc_collection_get_name';
 function mongo_collection_count(collection: Pointer; const queryflag: integer; query: Pointer; skip: int64; limit: int64; const read_prefs: Pointer): int64; cdecl; external MongoDll name 'mongoc_collection_count';
 
 
-function mongo_collection_update(collection: Pointer; updateflags: integer; const selector: Pointer; const update: Pointer; const write_concern: Pointer; error: Pointer): boolean; cdecl; external MongoDll name 'mongoc_collection_update';
-function mongo_collection_insert(collection: Pointer; insertflags: integer; const document: Pointer; const write_concern: Pointer; error: Pointer): boolean; cdecl; external MongoDll name 'mongoc_collection_insert';
-function mongo_collection_delete(collection: Pointer; deleteflags: integer; const selector: Pointer; const write_concern: Pointer; error: Pointer): Boolean;  cdecl; external MongoDll name 'mongoc_collection_delete';
+function mongo_collection_update(collection: Pointer; updateflags: integer; const selector: Pointer; const update: Pointer; const write_concern: PTWriteConcern; error: PTBsonError): boolean; cdecl; external MongoDll name 'mongoc_collection_update';
+function mongo_collection_insert(collection: Pointer; insertflags: integer; const document: Pointer; const write_concern: PTWriteConcern; error: PTBsonError): boolean; cdecl; external MongoDll name 'mongoc_collection_insert';
+function mongo_collection_remove(collection: Pointer; removeflags: integer; const selector: Pointer; const write_concern: PTWriteConcern; error: PTBsonError): Boolean;  cdecl; external MongoDll name 'mongoc_collection_remove';
 
+function mongo_collection_copy(collection: Pointer): Pointer; cdecl; external MongoDll name 'mongoc_collection_copy';
+function mongo_collection_stats(collection: Pointer; const options: Pointer; reply: Pointer; error: PTBsonError): boolean; cdecl; external MongoDll name 'mongoc_collection_stats';
+function mongo_collection_rename(collection: Pointer; const new_db: PAnsiString; const new_name: PAnsiString; drop_target_before_rename: boolean; error: PTBsonError): boolean; cdecl; external MongoDll name 'mongoc_collection_rename';
+function mongo_collection_save(collection: Pointer; document: Pointer; const write_concern: PTWriteConcern; error: PTBsonError): boolean; cdecl; external MongoDll name 'mongoc_collection_save';
+function mongo_collection_get_last_error(collection: Pointer): Pointer; cdecl; external MongoDll name 'mongoc_collection_get_last_error';
+function mongo_collection_validate(collection: Pointer; options: Pointer; reply: Pointer; error: PTBsonError): boolean; cdecl; external MongoDll name 'mongoc_collection_validate';
+function mongo_collection_command_simple(collection: Pointer; const command: Pointer; const read_prefs: Pointer; reply: Pointer; error: PTBsonError): boolean; cdecl; external MongoDll name 'mongoc_collection_command_simple';
+function mongo_collection_find_indexes(collection: Pointer; error: PTBsonError): Pointer;  cdecl; external MongoDll name 'mongoc_collection_find_indexes';
 
 procedure mongo_cursor_destroy(const cursor: Pointer);cdecl; external MongoDll name 'mongoc_cursor_destroy';
 function mongo_cursor_next(const cursor: Pointer; document: Pointer): Boolean; cdecl; external MongoDll name 'mongoc_cursor_next';
 function mongo_cursor_has_more(const cursor: Pointer): Boolean; cdecl; external MongoDll name 'mongoc_cursor_more';
 function mongo_cursor_clone(const cursor: Pointer): Pointer; external MongoDll name 'mongoc_cursor_clone';
 function mongo_cursor_current(const cursor: Pointer): Pointer; cdecl; external MongoDll name 'mongoc_cursor_current';
+
+
 
 constructor TMongoClient.Create(url: string='mongodb://localhost:27017/');
 begin
@@ -159,6 +187,9 @@ var
 begin
   utf8_database := utf8_encode(database);
   utf8_collection := utf8_encode(collection);
+  self.connection := connection;
+  self.database := utf8_database;
+  self.collection := utf8_collection;
   handle := mongo_client_get_collection(connection.handle, PAnsiString(utf8_database), PAnsiString(utf8_collection));
 end;
 
@@ -179,12 +210,28 @@ begin
 end;
 
 
-function TMongoCollection.delete(flag: TDELETE_FLAGS; const selector: TBson; const write_concern: PTWriteConcern; var error: TBsonError): boolean;
+function TMongoCollection.remove(flag: TREMOVE_FLAGS; const selector: TBson; const write_concern: PTWriteConcern; var error: TBsonError): boolean;
 begin
-  Result := mongo_collection_delete(handle, ord(flag), selector.handle, write_concern, @error);
+  Result := mongo_collection_remove(handle, ord(flag), selector.handle, write_concern, @error);
 end;
 
-function TMongoCollection.find(flag: TQUERY_FLAGS; skip: longint; limit: longint; batch_size: longint; query: TBson; fields: TBson; read_prefs: PTReadPrefs): TMongoCursor;
+function TMongoCollection.rename(const new_db: string; const new_name: string; drop_target_before_rename: boolean; var error: TBsonError): boolean;
+begin
+  Result := mongo_collection_rename(handle, PAnsiString(new_db), PAnsiString(new_name), drop_target_before_rename, @error);
+end;
+
+function TMongoCollection.save(const document: TBson; const write_concern: PTWriteConcern; var error: TBsonError): boolean;
+begin
+  Result := mongo_collection_save(handle, document.handle, write_concern, @error);
+end;
+
+function TMongoCollection.find_indexes(var error: TBsonError): TMongoCursor;
+begin
+  Result := TMongoCursor.Create;
+  Result.handle := mongo_collection_find_indexes(handle, @error);
+end;
+
+function TMongoCollection.find(flag: TQUERY_FLAGS; skip: longint; limit: longint; batch_size: longint; const query: TBson; const fields: TBson; read_prefs: PTReadPrefs): TMongoCursor;
 var
    query_handle,
    fields_handle: pointer;
@@ -220,13 +267,41 @@ end;
 
 function TMongoCollection.create_index(const keys: TBson; opt: TIndexOpt; var error: TBsonError): boolean;
 begin
-  Result := mongo_collection_create_index(handle, @keys, @opt, @error);
+  Result := mongo_collection_create_index(handle, keys.handle, @opt, @error);
 end;
 
 function TMongoCollection.count(flag: TQUERY_FLAGS; const query: TBson; skip: int64; limit: int64; read_prefs: PTReadPrefs): int64;
 begin
-  Result := mongo_collection_count(handle, ord(flag), query.handle, skip, limit, read_prefs); 
+  Result := mongo_collection_count(handle, ord(flag), query.handle, skip, limit, read_prefs);
 end;
+
+function TMongoCollection.get_last_error: TBson;
+begin
+  Result := TBson.Create;
+  Result.handle := mongo_collection_get_last_error(handle);
+end;
+
+function TMongoCollection.copy: TMongoCollection;
+begin
+  Result := TMongoCollection.Create(self.connection, self.database, self.collection);
+  Result.handle := mongo_collection_copy(handle);
+end;
+
+function TMongoCollection.command_simple(const command: TBson; const read_prefs: PTReadPrefs; var reply: TBson; var error: TBsonError): boolean;
+begin
+  Result := mongo_collection_command_simple(handle, command.handle, read_prefs, reply.handle, @error);
+end;
+
+function TMongoCollection.validate(const options: TBson; var reply: TBson; var error: TBsonError): boolean;
+begin
+  Result := mongo_collection_validate(handle, options.handle, reply.handle, @error);
+end;
+
+function TMongoCollection.stats(const options: TBson; var reply: TBson; var error: TBsonError): boolean;
+begin
+  Result := mongo_collection_stats(handle, options.handle, reply.handle, @error);
+end;
+
 
 function TMongoCursor.has_next: boolean;
 begin
@@ -235,12 +310,13 @@ end;
 
 function TMongoCursor.current: TBson;
 begin
-  Result := mongo_cursor_current(handle);
+  Result := TBson.Create;
+  Result.handle := mongo_cursor_current(handle);
 end;
 
 function TMongoCursor.next(var document: TBson): boolean;
 begin
-  Result := mongo_cursor_next(handle, @document);
+  Result := mongo_cursor_next(handle, document.handle);
 end;
 
 destructor TMongoCursor.Destroy;
@@ -248,7 +324,6 @@ begin
   mongo_cursor_destroy(handle);
   handle := nil;
 end;
-
 
 initialization
   mongo_init;
