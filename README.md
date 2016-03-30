@@ -6,11 +6,14 @@ Currently missing parts:
 * no gridfs support
 
 ToDo:
+* easy to use api
 * documentation
 * full test case coverage
 * resolve more pointer to typed pointer
 * seperate class mongodb
 
+Kudos to:
+* DRazny for bug fixes, advices, cleanups
 
 License:
 Like the c-driver Apache 2.0.
