@@ -125,9 +125,7 @@ function bson_append_null(document: Pointer; key: PChar; key_len: integer): bool
 implementation
 
 uses
-  SysUtils{,
-  StrUtils }
-  ;
+  SysUtils;
 
 function utf8_encode(str: string): string;
 begin

@@ -99,7 +99,8 @@ type
     destructor Destroy; override;
 
     function drop(var error: TBsonError): boolean;
-    function create_index(const keys: TBson; opt: TIndexOpt; var error: TBsonError): boolean;
+    function create_index(const keys: TBson; var error: TBsonError): boolean; overload;
+    function create_index(const keys: TBson; opt: TIndexOpt; var error: TBsonError): boolean; overload;
     function drop_index(const name: string; var error: TBsonError): boolean;
 
     function get_name: string;
@@ -108,11 +109,15 @@ type
     function find(const query: TBson; limit: longint=0): TMongoCursor; overload;
     function find(flag: TQUERY_FLAGS; skip: longint; limit: longint; batch_size: longint; const query: TBson; const fields: TBson; read_prefs: PTReadPrefs): TMongoCursor; overload;
     function find_indexes(var error: TBsonError): TMongoCursor;
-    function count(flag: TQUERY_FLAGS; const query: TBson; skip: int64; limit: int64; read_prefs: PTReadPrefs): int64;
+    function count(const query: TBson; limit: int64=0): int64; overload;
+    function count(flag: TQUERY_FLAGS; const query: TBson; skip: int64; limit: int64; read_prefs: PTReadPrefs): int64; overload;
 
-    function update(flag: TUPDATE_FLAGS; const selector: TBson; const update: TBson; const write_concern: PTWriteConcern; var error: TBsonError): boolean;
-    function insert(flag: TINSERT_FLAGS; const document: TBson; const write_concern: PTWriteConcern; var error: TBsonError): boolean;
-    function remove(flag: TREMOVE_FLAGS; const selector: TBson; const write_concern: PTWriteConcern; var error: TBsonError): boolean;
+    function update(const selector: TBson; const update: TBson; var error: TBsonError): boolean; overload;
+    function update(flag: TUPDATE_FLAGS; const selector: TBson; const update: TBson; const write_concern: PTWriteConcern; var error: TBsonError): boolean; overload;
+    function insert(const document: TBson; var error: TBsonError): boolean; overload;
+    function insert(flag: TINSERT_FLAGS; const document: TBson; const write_concern: PTWriteConcern; var error: TBsonError): boolean; overload;
+    function remove(const selector: TBson; var error: TBsonError): boolean; overload;
+    function remove(flag: TREMOVE_FLAGS; const selector: TBson; const write_concern: PTWriteConcern; var error: TBsonError): boolean; overload;
 
     function rename(const new_db: string; const new_name: string; drop_target_before_rename: boolean; var error: TBsonError): boolean;
     function save(const document: TBson; const write_concern: PTWriteConcern; var error: TBsonError): boolean;
@@ -210,15 +215,31 @@ begin
   inherited;
 end;
 
+function TMongoCollection.update(const selector: TBson; const update: TBson; var error: TBsonError): boolean;
+begin
+  Result := self.update(UPDATE_NONE, selector, update, nil, error);
+end;
+
 function TMongoCollection.update(flag: TUPDATE_FLAGS; const selector: TBson; const update: TBson; const write_concern: PTWriteConcern; var error: TBsonError): boolean;
 begin
   Result := mongo_collection_update(FHandle, ord(flag), selector.Handle, update.Handle, write_concern, @error);
 end;
 
+function TMongoCollection.insert(const document: TBson; var error: TBsonError): Boolean;
+begin
+  Result := insert(INSERT_NONE, document, nil, error);
+end;
+
+
 function TMongoCollection.insert(flag: TINSERT_FLAGS; const document: TBson; const write_concern: PTWriteConcern;
                                        var error: TBsonError): boolean;
 begin
   Result := mongo_collection_insert(FHandle, ord(flag), document.Handle, write_concern, @error);
+end;
+
+function TMongoCollection.remove(const selector: TBson; var error: TBsonError): boolean;
+begin
+  Result := remove(REMOVE_NONE, selector, nil, error);
 end;
 
 
@@ -293,9 +314,19 @@ begin
   Result := mongo_collection_drop_index(FHandle, PChar(utf8_name), @error);
 end;
 
+function TMongoCollection.create_index(const keys: TBson; var error: TBsonError): boolean; 
+begin
+  Result := mongo_collection_create_index(FHandle, keys.Handle, nil, @error);
+end;
+
 function TMongoCollection.create_index(const keys: TBson; opt: TIndexOpt; var error: TBsonError): boolean;
 begin
   Result := mongo_collection_create_index(FHandle, keys.Handle, @opt, @error);
+end;
+
+function TMongoCollection.count(const query: TBson; limit: int64=0): int64;
+begin
+  Result := self.count(QUERY_NONE, query, 0, limit, nil);
 end;
 
 function TMongoCollection.count(flag: TQUERY_FLAGS; const query: TBson; skip: int64; limit: int64; read_prefs: PTReadPrefs): int64;
