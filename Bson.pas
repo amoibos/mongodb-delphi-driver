@@ -125,8 +125,9 @@ function bson_append_null(document: Pointer; key: PChar; key_len: integer): bool
 implementation
 
 uses
-  SysUtils,
-  StrUtils;
+  SysUtils{,
+  StrUtils }
+  ;
 
 function utf8_encode(str: string): string;
 begin
@@ -395,7 +396,7 @@ var
   LJson: PChar;
 begin
   LJson := bson_as_json(FHandle, nil);
-  Result := StrNew(LJson) ;
+  Result := utf8_decode(StrNew(LJson));
   bson_destroy(LJson);
 end;
 
