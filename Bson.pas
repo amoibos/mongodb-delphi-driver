@@ -107,16 +107,16 @@ function bson_append_time_t(document: Pointer; key: PChar; key_len: integer; val
 function bson_append_timestamp(document: Pointer; key: PChar; key_len: integer; timestamp: integer; increment: integer): boolean; cdecl; external BsonDll name 'bson_append_timestamp';
 function bson_append_datetime(document: Pointer; key: PChar; key_len: integer; value: int64): boolean; cdecl; external BsonDll name 'bson_append_date_time';
 function bson_append_array(document: Pointer; key: PChar; key_len: integer; value: Pointer): boolean; cdecl; external BsonDll name 'bson_append_array';
-function bson_append_binary(document: Pointer; key: PChar; key_len: integer; subtype: integer; binary: PChar; bin_len: integer): boolean; cdecl; external BsonDll name 'bson_append_bool';
+function bson_append_binary(document: Pointer; key: PChar; key_len: integer; subtype: integer; binary: PChar; bin_len: integer): boolean; cdecl; external BsonDll name 'bson_append_binary';
 function bson_append_bool(document: Pointer; key: PChar; len_key: integer; value: boolean): boolean; cdecl; external BsonDll name 'bson_append_bool';
 function bson_append_code(document: Pointer; key: PChar; key_len: integer; javascript: PChar): boolean; cdecl; external BsonDll name 'bson_append_code';
 function bson_append_code_with_scope(document: Pointer; key: PChar; key_len: integer; javascript: PChar; scope: Pointer): boolean; cdecl; external BsonDll name 'bson_append_code_with_scope';
 function bson_append_dbpointer(document: Pointer; key: PChar; key_len: integer; collection: PChar; oid: Pointer): boolean;  cdecl; external BsonDll name 'bson_append_dbpointer';
 //function bson_append_iter(document: Pointer; key: PAnsiString; key_len: integer; iter: Pointer): boolean;   cdecl; external BsonDll name 'bson_append_iter';
-function bson_append_double(document: Pointer; key: PChar; key_len: integer;value: double): boolean; cdecl; external BsonDll name 'bson_append_regex';
-function bson_append_document(document: Pointer; key: PChar; key_len: integer; value: Pointer): boolean; cdecl; external BsonDll name 'bson_append_regex';
-function bson_append_document_begin(document: Pointer; key: PChar; key_len: integer; child: Pointer): boolean; cdecl; external BsonDll name 'bson_append_regex';
-function bson_append_document_end(document: Pointer; child: Pointer): boolean; cdecl; external BsonDll name 'bson_append_regex';
+function bson_append_double(document: Pointer; key: PChar; key_len: integer;value: double): boolean; cdecl; external BsonDll name 'bson_append_double';
+function bson_append_document(document: Pointer; key: PChar; key_len: integer; value: Pointer): boolean; cdecl; external BsonDll name 'bson_append_document';
+function bson_append_document_begin(document: Pointer; key: PChar; key_len: integer; child: Pointer): boolean; cdecl; external BsonDll name 'bson_append_document_begin';
+function bson_append_document_end(document: Pointer; child: Pointer): boolean; cdecl; external BsonDll name 'bson_append_document_end';
 function bson_append_int64(document: Pointer; key: PChar; key_len: integer; value: int64): boolean; cdecl; external BsonDll name 'bson_append_int64';
 function bson_append_minkey(document: Pointer; key: PChar; key_len: integer): boolean; cdecl; external BsonDll name 'bson_append_min_key';
 function bson_append_maxkey(document: Pointer; key: PChar;  key_len: integer): boolean; cdecl; external BsonDll name 'bson_append_max_key';
@@ -164,7 +164,7 @@ var
   utf8_key: string;
 begin
   utf8_key := utf8_encode(key);
-  Result := bson_append_array_begin(FHandle, @AnsiString(utf8_key), length(utf8_key), child.FHandle);
+  Result := bson_append_array_begin(FHandle, PChar(utf8_key), length(utf8_key), child.FHandle);
 end;
 
 function TBson.append_array_end(child: TBson): boolean;
@@ -178,7 +178,7 @@ var
   utf8_key: string;
 begin
   utf8_key := utf8_encode(key);
-  Result := bson_append_int(FHandle, @AnsiString(utf8_key), length(utf8_key), value);
+  Result := bson_append_int(FHandle, PChar(utf8_key), length(utf8_key), value);
 end;
 
 function TBson.append_oid(key: string; oid: TBsonOid): boolean;
@@ -394,7 +394,7 @@ var
   LJson: PChar;
 begin
   LJson := bson_as_json(FHandle, nil);
-  Result := utf8_decode(StrNew(LJson));
+  Result := utf8_decode(LJson);
   bson_destroy(LJson);
 end;
 
