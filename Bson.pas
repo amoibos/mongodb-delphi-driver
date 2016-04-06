@@ -10,20 +10,50 @@ type
               BSON_FLAG_CHILD, BSON_FLAG_IN_CHILD, BSON_FLAG_NO_FREE);
 
    TBsonOid = array[0..11] of byte;
-   TSubType = (TYPE_EOD, TYPE_DOUBLE, TYPE_UTF8, TYPE_DOCUMENT, TYPE_ARRAY, TYPE_BINARY, TYPE_UNDEFINED,
+   TSubType = (TYPE_EOD, TYPE_DOUBLE, TYPE_TEXT, TYPE_DOCUMENT, TYPE_ARRAY, TYPE_BINARY, TYPE_UNDEFINED,
                TYPE_OID, TYPE_BOOL, TYPE_DATE_TIME, TYPE_NULL, TYPE_REGEX, TYPE_DBPOINTER, TYPE_CODE,
-               TYPE_SYMBOL, TYPE_CODEWSCOPE, TYPE_INT32, TYPE_TIMESTAMP, TYPE_INT64, TYPE_MAXKEY, TYPE_MINKEY);
-               
+               TYPE_SYMBOL, TYPE_CODEWSCOPE, TYPE_INT32, TYPE_TIMESTAMP, TYPE_INT64{required special handling, TYPE_MAXKEY=7F, TYPE_MINKEY=0xFF});
+
+   TBsonValue = packed record
+     value_type: longint;//TSubType;
+     padding: integer; //4 bytes
+     union_data: array[1..12] of char;
+   end;
+
+    TBsonIter = packed record
+     raw: PChar;        // The raw buffer being iterated.
+     len: longint;      // The length of raw.
+     off: longint;      // The offset within the buffer. 
+     type_: longint;    // The offset of the type byte.
+     key: longint;      // The offset of the key byte.
+     d1: longint;       // The offset of the first data byte.
+     d2: longint;       // The offset of the second data byte.
+     d3: longint;       // The offset of the third data byte.
+     d4: longint;       // The offset of the fourth data byte.
+     next_off: longint; // The offset of the next field.
+     err_off: longint;  // The offset of the error.
+     value: TBsonValue; // Internal value for various state.
+   end;
+   //PTBsonIter = ^TBsonIter;
+
+   TBsonType = packed record
+     flags: longint;
+     len: longint;
+     padding: array[1..120] of char;
+   end;
+   PTBsonType = ^TBsonType;
+
    TBson = class
    private
      FHandle: Pointer;
      procedure SetHandle(const Value: Pointer);
-    function GetPHandle: Pointer;
+     function GetPHandle: Pointer;
    public
      constructor Create; overload;
      constructor Create(AHandle: Pointer); overload;
      destructor Destroy; override;
 
+     procedure reinit;
      function compare(other: TBson): integer;
      function concat(var destination: TBson): boolean;
      function copy: TBson;
@@ -39,7 +69,7 @@ type
      function append_datetime(key: string; value: int64): boolean;
      function append_array(key: string; value: TBson): boolean;
      function append_binary(key: string; subtype: TSubType; binary: string): boolean;
-     function append_bool(key: string; value: boolean): boolean;
+     function append_boolean(key: string; value: boolean): boolean;
      function append_code(key: string; javascript: string): boolean;
      function append_code_with_scope(key: string; javascript: string; scope: TBson): boolean;
     // function append_dbpointer(key: string; collection: TMongoCollection): boolean;
@@ -68,17 +98,30 @@ type
      code: longint;
      message: array[0..503] of char;
    end;
-
    PTBsonError = ^TBsonError;
 
-   TBsonType = packed record
-     flags: longint;
-     len: longint;
-     //padding byte 120
-   end;
-   PTBsonType = ^TBsonType;
+  TBsonIterator = class(TObject)
+  private
+    FIterStruct: TBsonIter;
+  public
+    constructor Create; overload;
+    constructor Create(document: TBson); overload;
+    constructor Create(document: TBson; field: string); overload;
 
-   function bson_new_oid: TBsonOid;
+    procedure Init(document: TBson);
+    function key: string;
+    function next: boolean;
+    function typ: integer;//TSubType
+    function text: string;
+    function int: integer;
+    function int64: int64;
+    function double: double;
+    function boolean: boolean;
+  end;
+
+
+
+function bson_new_oid: TBsonOid;
 
 function bson_compare(document: Pointer; other: Pointer): integer;   cdecl; external BsonDll name 'bson_compare';
 function bson_concat(document: Pointer; var destination: Pointer): boolean; cdecl; external BsonDll name 'bson_concat';
@@ -90,10 +133,11 @@ function bson_as_json(document: Pointer; len: Pointer): PChar; cdecl; external B
 
 function bson_new: Pointer  cdecl; external BsonDll name 'bson_new';
 procedure bson_destroy(document: Pointer) cdecl; external BsonDll name 'bson_destroy';
+procedure bson_reinit(document: Pointer); cdecl; external BsonDll name 'bson_reinit';
 
 procedure bson_oid_init(oid: Pointer; bson_context: Pointer); cdecl; external BsonDll name 'bson_oid_init';
 
-
+//append functions
 function bson_append_int(document: Pointer; key: PChar; len_key: integer; value: integer): boolean; cdecl; external BsonDll name 'bson_append_int32';
 function bson_append_oid(document: Pointer; key: PChar; len_key: integer; oid: Pointer): boolean; cdecl; external BsonDll name 'bson_append_oid';
 function bson_append_text(document: Pointer; key: PChar; len_key: integer; value: PChar; len_value: integer): Boolean; cdecl; external BsonDll name 'bson_append_utf8';
@@ -121,6 +165,22 @@ function bson_append_int64(document: Pointer; key: PChar; key_len: integer; valu
 function bson_append_minkey(document: Pointer; key: PChar; key_len: integer): boolean; cdecl; external BsonDll name 'bson_append_min_key';
 function bson_append_maxkey(document: Pointer; key: PChar;  key_len: integer): boolean; cdecl; external BsonDll name 'bson_append_max_key';
 function bson_append_null(document: Pointer; key: PChar; key_len: integer): boolean; cdecl; external BsonDll name 'bson_append_null';
+
+//iterator functions
+function bson_iter_init(AIter: Pointer; document: Pointer): Boolean; cdecl; external BsonDll name 'bson_iter_init';
+function bson_iter_next(AIter: Pointer): Boolean; cdecl; external BsonDll name 'bson_iter_next';
+function bson_iter_key(AIter: Pointer): PChar; cdecl; external BsonDll name 'bson_iter_key';
+function bson_iter_type(AIter: Pointer): integer; cdecl; external BsonDll name 'bson_iter_type';
+function bson_iter_text(AIter: Pointer; var len: integer): PChar; cdecl; external BsonDll name 'bson_iter_utf8';
+
+function bson_iter_int64(AIter: Pointer): int64; cdecl; external BsonDll name 'bson_iter_int64';
+function bson_iter_int(AIter: Pointer): integer; cdecl; external BsonDll name 'bson_iter_int32';
+function bson_iter_document(AIter: Pointer; len: integer; document: Pointer): double; cdecl; external BsonDll name 'bson_iter_document';
+function bson_iter_code(AIter: Pointer; len: integer): PChar; cdecl; external BsonDll name 'bson_iter_code';
+function bson_iter_boolean(AIter: Pointer): boolean; cdecl; external BsonDll name 'bson_iter_bool';
+function bson_iter_double(AIter: Pointer): double; cdecl; external BsonDll name 'bson_iter_double';
+function bson_iter_init_find(AIter: Pointer; document: Pointer; field: PChar): boolean; external BsonDll name 'bson_iter_init_find';
+
 
 implementation
 
@@ -158,6 +218,15 @@ begin
   if Assigned(FHandle) then
     bson_destroy(FHandle);
 end;
+
+procedure TBson.reinit;
+begin
+ if Assigned(FHandle) then
+  begin
+    bson_reinit(FHandle);
+ end;
+end;
+
 
 function TBson.append_array_begin(key: string; child: TBson): boolean;
 var
@@ -320,7 +389,7 @@ begin
     PChar(javascript), scope.FHandle);
 end;
 
-function TBson.append_bool(key: string; value: boolean): boolean;
+function TBson.append_boolean(key: string; value: boolean): boolean;
 var
   utf8_key: string;
 begin
@@ -409,6 +478,86 @@ end;
 function TBson.GetPHandle: Pointer;
 begin
   Result := @FHandle;
+end;
+
+function TBsonIterator.key: string;
+var
+  str: PChar;
+begin
+  str := bson_iter_key(@FIterStruct);
+
+  if str = nil then
+    exit;
+  Result := String(str);
+  Result := utf8_decode(Result);
+end;
+
+function TBsonIterator.typ: integer;
+begin
+  Result := bson_iter_type(@FIterStruct);
+end;
+
+
+constructor TBsonIterator.Create(document: TBson);
+begin
+  inherited Create;
+  Init(document);
+end;
+
+constructor TBsonIterator.Create(document: TBson; field: string);
+begin
+  inherited Create;
+  bson_iter_init_find(@FIterStruct, document.FHandle, PChar(field));
+end;
+
+function TBsonIterator.next: boolean;
+begin
+  Result := bson_iter_next(@FIterStruct);
+end;
+
+function TBsonIterator.text: string;
+var
+  str: PChar;
+  len: integer;
+begin
+  str := bson_iter_text(@FIterStruct, len);
+
+  if (str = nil) or (len = 0) then
+    exit;
+  SetLength(Result, len);
+  Move(str^, Result[1], len);
+  //StrDispose(str);
+  Result := utf8_decode(Result);
+end;
+
+function TBsonIterator.int: integer;
+begin
+  Result := bson_iter_int(@FIterStruct);
+end;
+
+function TBsonIterator.int64: int64;
+begin
+  Result := bson_iter_int64(@FIterStruct);
+end;
+
+function TBsonIterator.double: double;
+begin
+  Result := bson_iter_double(@FIterStruct);
+end;
+
+function TBsonIterator.boolean: boolean;
+begin
+  Result := bson_iter_boolean(@FIterStruct);
+end;
+
+procedure TBsonIterator.Init(document: TBson);
+begin
+  bson_iter_init(@FIterStruct, document.FHandle);
+end;
+
+constructor TBsonIterator.Create;
+begin
+  inherited
 end;
 
 end.
