@@ -39,11 +39,11 @@ type
    TBsonType = packed record
      flags: longint;
      len: longint;
-     padding: array[1..120] of char;
+    // padding: array[1..120] of char;
    end;
    PTBsonType = ^TBsonType;
 
-   TBson = class
+   TBson = class(TObject)
    private
      FHandle: Pointer;
      procedure SetHandle(const Value: Pointer);
@@ -107,6 +107,7 @@ type
     constructor Create; overload;
     constructor Create(document: TBson); overload;
     constructor Create(document: TBson; field: string); overload;
+    destructor Destroy; override;
 
     procedure Init(document: TBson);
     function key: string;
@@ -117,6 +118,9 @@ type
     function int64: int64;
     function double: double;
     function boolean: boolean;
+   // procedure update_double(value: double);
+     
+
   end;
 
 
@@ -217,6 +221,7 @@ destructor TBson.Destroy;
 begin
   if Assigned(FHandle) then
     bson_destroy(FHandle);
+  inherited;
 end;
 
 procedure TBson.reinit;
@@ -238,7 +243,7 @@ end;
 
 function TBson.append_array_end(child: TBson): boolean;
 begin
-  Result := bson_append_array_end(FHandle, @child);
+  Result := bson_append_array_end(FHandle, child.FHandle);
 end;
 
 
@@ -281,7 +286,7 @@ end;
 function TBson.copy: TBson;
 begin
   Result := TBson.Create;
-  Result.FHandle := bson_copy(FHandle);
+  Result.Handle := bson_copy(FHandle);
 end;
 
 function TBson.count_keys: integer;
@@ -469,7 +474,7 @@ end;
 
 procedure TBson.SetHandle(const Value: Pointer);
 begin
-  if (FHandle <> nil) then
+  if FHandle <> nil then
     bson_destroy(FHandle);
 
   FHandle := Value;
@@ -526,7 +531,6 @@ begin
     exit;
   SetLength(Result, len);
   Move(str^, Result[1], len);
-  //StrDispose(str);
   Result := utf8_decode(Result);
 end;
 
@@ -557,7 +561,12 @@ end;
 
 constructor TBsonIterator.Create;
 begin
-  inherited
+  inherited;
+end;
+
+destructor TBsonIterator.Destroy;
+begin
+  inherited;
 end;
 
 end.

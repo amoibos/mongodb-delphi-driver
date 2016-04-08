@@ -9,9 +9,12 @@ type
   TMongoClient = class(TObject)
   private
     FHandle: Pointer;
+    procedure SetHandle(const Value: Pointer);
   public
     constructor Create(const url: string='mongodb://localhost:27017/');
     destructor Destroy; override;
+
+    property Handle : Pointer read FHandle write SetHandle;
   end;
 
   TReadMode = (READ_PRIMARY, READ_SECONDARY, READ_PRIMARY_PREFERRED,
@@ -34,6 +37,7 @@ type
   private
     FHandle: Pointer;
     FBson: TBson;
+    procedure SetHandle(const Value: Pointer);
   public
     constructor Create;
     destructor Destroy; override;
@@ -41,8 +45,9 @@ type
     function next: boolean;
     function has_next: boolean;
     function current: TBson;
+    property Handle : Pointer read FHandle write SetHandle;
   end;
-  
+
   TIndexOptGeo = packed record
     twod_sphere_version: byte;
     twod_bits_precision: byte;
@@ -82,11 +87,6 @@ type
   end;
   PTWriteConcern= ^TWriteConcern;
 
-  {TReadConcern = packed record
-
-  end;
-  PTReadConcern = ^TReadConcern; }
-
   TMongoCollection = class(TObject)
   private
     FHandle: Pointer;
@@ -94,6 +94,7 @@ type
     FDatabase: string;
     FCollection: string;
     FQueryCount: Integer;
+    procedure SetHandle(const Value: Pointer);
   public
     constructor Create(AConnection: TMongoClient; const ADatabase: string; const ACollection: string);
     destructor Destroy; override;
@@ -134,6 +135,7 @@ type
     function stats(const options: TBson; var Reply: TBson; var Error: TBsonError): boolean;
 
     property QueryCount: Integer read FQueryCount;
+    property Handle : Pointer read FHandle write SetHandle;
   end;
 
 const
@@ -146,7 +148,7 @@ procedure mongo_init; cdecl; external MongoDll name 'mongoc_init';
 procedure mongo_cleanup; cdecl; external MongoDll name 'mongoc_cleanup';
 
 function mongo_client_new(url: PChar): Pointer; cdecl; external MongoDll name 'mongoc_client_new';
-procedure mongo_client_destroy(FHandle: Pointer); cdecl; external MongoDll name 'mongoc_client_destroy';
+procedure mongo_client_destroy(Handle: Pointer); cdecl; external MongoDll name 'mongoc_client_destroy';
 
 
 function mongo_client_get_collection(client: Pointer; FDatabase: PChar; FCollection: PChar): Pointer;  cdecl; external MongoDll name 'mongoc_client_get_collection';
@@ -195,12 +197,12 @@ end;
 constructor TMongoClient.Create(const url: string='mongodb://localhost:27017/');
 begin
   inherited Create;
-  FHandle := mongo_client_new(PChar(utf8_encode(url)));
+  Handle := mongo_client_new(PChar(utf8_encode(url)));
 end;
 
 destructor TMongoClient.Destroy;
 begin
-  mongo_client_destroy(FHandle);
+  mongo_client_destroy(Handle);
   inherited;
 end;
 
@@ -215,12 +217,12 @@ begin
   FConnection := AConnection;
   FDatabase := utf8_database;
   FCollection := utf8_collection;
-  FHandle := mongo_client_get_collection(FConnection.FHandle, PChar(utf8_database), PChar(utf8_collection));
+  Handle := mongo_client_get_collection(FConnection.Handle, PChar(utf8_database), PChar(utf8_collection));
 end;
 
 destructor TMongoCollection.Destroy;
 begin
-  mongo_collection_destroy(FHandle);
+  mongo_collection_destroy(Handle);
   inherited;
 end;
 
@@ -231,7 +233,7 @@ end;
 
 function TMongoCollection.update(flag: TUPDATE_FLAGS; const selector: TBson; const update: TBson; const write_concern: PTWriteConcern; var Error: TBsonError): boolean;
 begin
-  Result := mongo_collection_update(FHandle, ord(flag), selector.Handle, update.Handle, write_concern, @Error);
+  Result := mongo_collection_update(Handle, ord(flag), selector.Handle, update.Handle, write_concern, @Error);
 end;
 
 function TMongoCollection.insert(const document: TBson; var Error: TBsonError): Boolean;
@@ -243,7 +245,7 @@ end;
 function TMongoCollection.insert(flag: TINSERT_FLAGS; const document: TBson; const write_concern: PTWriteConcern;
                                        var Error: TBsonError): boolean;
 begin
-  Result := mongo_collection_insert(FHandle, ord(flag), document.Handle, write_concern, @Error);
+  Result := mongo_collection_insert(Handle, ord(flag), document.Handle, write_concern, @Error);
 end;
 
 function TMongoCollection.remove(const selector: TBson; var Error: TBsonError): boolean;
@@ -255,25 +257,25 @@ end;
 function TMongoCollection.remove(flag: TREMOVE_FLAGS; const selector: TBson; const write_concern: PTWriteConcern;
                                        var Error: TBsonError): boolean;
 begin
-  Result := mongo_collection_remove(FHandle, ord(flag), selector.Handle, write_concern, @Error);
+  Result := mongo_collection_remove(Handle, ord(flag), selector.Handle, write_concern, @Error);
 end;
 
 function TMongoCollection.rename(const new_db: string; const new_name: string;
          drop_target_before_rename: boolean; var Error: TBsonError): boolean;
 begin
-  Result := mongo_collection_rename(FHandle, PChar(new_db), PChar(new_name), drop_target_before_rename, @Error);
+  Result := mongo_collection_rename(Handle, PChar(new_db), PChar(new_name), drop_target_before_rename, @Error);
 end;
 
 function TMongoCollection.save(const document: TBson; const write_concern: PTWriteConcern;
                                      var Error: TBsonError): boolean;
 begin
-  Result := mongo_collection_save(FHandle, document.Handle, write_concern, @Error);
+  Result := mongo_collection_save(Handle, document.Handle, write_concern, @Error);
 end;
 
 function TMongoCollection.find_indexes(var Error: TBsonError): TMongoCursor;
 begin
   Result := TMongoCursor.Create;
-  Result.FHandle := mongo_collection_find_indexes(FHandle, @Error);
+  Result.Handle := mongo_collection_find_indexes(Handle, @Error);
 end;
 
 function TMongoCollection.find(const query: TBson; limit: longint=0): TMongoCursor;
@@ -300,7 +302,7 @@ var
   fields_handle: pointer;
   number: integer;
 begin
-  Inc(FQueryCount); 
+  Inc(FQueryCount);
   query_handle  :=  AccessAttributeIfPossible(query);
   fields_handle :=  AccessAttributeIfPossible(fields);
 
@@ -308,18 +310,18 @@ begin
   number := ord(flag);
   if number > 0 then
      number := 1 shl ord(flag);
-
-  ACursor.FHandle := mongo_collection_find(FHandle, number, skip, limit, batch_size, query_handle, fields_handle, read_prefs);
+ 
+  ACursor.Handle := mongo_collection_find(Handle, number, skip, limit, batch_size, query_handle, fields_handle, read_prefs);
 end;
 
 function TMongoCollection.drop(var Error: TBsonError): boolean;
 begin
-  Result := mongo_collection_drop(FHandle, @Error);
+  Result := mongo_collection_drop(Handle, @Error);
 end;
 
 function TMongoCollection.get_name: string;
 begin
-  Result := utf8_decode(string(mongo_collection_get_name(FHandle)));
+  Result := utf8_decode(string(mongo_collection_get_name(Handle)));
 end;
 
 function TMongoCollection.drop_index(const name: string; var Error: TBsonError): boolean;
@@ -327,17 +329,17 @@ var
   utf8_name: string;
 begin
   utf8_name := utf8_encode(name);
-  Result := mongo_collection_drop_index(FHandle, PChar(utf8_name), @Error);
+  Result := mongo_collection_drop_index(Handle, PChar(utf8_name), @Error);
 end;
 
 function TMongoCollection.create_index(const keys: TBson; var Error: TBsonError): boolean; 
 begin
-  Result := mongo_collection_create_index(FHandle, keys.Handle, nil, @Error);
+  Result := mongo_collection_create_index(Handle, keys.Handle, nil, @Error);
 end;
 
 function TMongoCollection.create_index(const keys: TBson; opt: TIndexOpt; var Error: TBsonError): boolean;
 begin
-  Result := mongo_collection_create_index(FHandle, keys.Handle, @opt, @Error);
+  Result := mongo_collection_create_index(Handle, keys.Handle, @opt, @Error);
 end;
 
 function TMongoCollection.count(const query: TBson; limit: int64=0): int64;
@@ -347,33 +349,33 @@ end;
 
 function TMongoCollection.count(flag: TQUERY_FLAGS; const query: TBson; skip: int64; limit: int64; read_prefs: PTReadPrefs): int64;
 begin
-  Result := mongo_collection_count(FHandle, 0, query.Handle, skip, limit, read_prefs);
+  Result := mongo_collection_count(Handle, 0, query.Handle, skip, limit, read_prefs);
 end;
 
 function TMongoCollection.get_last_error: TBson;
 begin
-  Result := TBson.Create(mongo_collection_get_last_error(FHandle));
+  Result := TBson.Create(mongo_collection_get_last_error(Handle));
 end;
 
 function TMongoCollection.copy: TMongoCollection;
 begin
   Result := TMongoCollection.Create(self.FConnection, self.FDatabase, self.FCollection);
-  Result.FHandle := mongo_collection_copy(FHandle);
+  Result.Handle := mongo_collection_copy(Handle);
 end;
 
 function TMongoCollection.command_simple(const command: TBson; const read_prefs: PTReadPrefs; var Reply: TBson; var Error: TBsonError): boolean;
 begin
-  Result := mongo_collection_command_simple(FHandle, command.Handle, read_prefs, Reply.Handle, @Error);
+  Result := mongo_collection_command_simple(Handle, command.Handle, read_prefs, Reply.Handle, @Error);
 end;
 
 function TMongoCollection.validate(const options: TBson; var Reply: TBson; var Error: TBsonError): boolean;
 begin
-  Result := mongo_collection_validate(FHandle, options.Handle, Reply.Handle, @Error);
+  Result := mongo_collection_validate(Handle, options.Handle, Reply.Handle, @Error);
 end;
 
 function TMongoCollection.stats(const options: TBson; var Reply: TBson; var Error: TBsonError): boolean;
 begin
-  Result := mongo_collection_stats(FHandle, options.Handle, Reply.Handle, @Error);
+  Result := mongo_collection_stats(Handle, options.Handle, Reply.Handle, @Error);
 end;
 
 function TMongoCollection.find_and_modify(Query: TBson; Sort: TBson; Update: TBson; Fields: TBson; Remove: boolean; Upsert: boolean; New: boolean; Reply: TBson; var Error: TBsonError): boolean;
@@ -389,13 +391,13 @@ begin
   update_handle := AccessAttributeIfPossible(Update);
   fields_handle := AccessAttributeIfPossible(Fields);
   reply_handle := AccessAttributeIfPossible(Reply);
-  Result := mongo_collection_find_and_modify(FHandle, query_handle, sort_handle, update_handle, fields_handle, Remove, Upsert, New, reply_handle, @Error);
+  Result := mongo_collection_find_and_modify(Handle, query_handle, sort_handle, update_handle, fields_handle, Remove, Upsert, New, reply_handle, @Error);
 end;
 
 
 function TMongoCursor.has_next: boolean;
 begin
-  Result := mongo_cursor_has_more(FHandle);
+  Result := mongo_cursor_has_more(Handle);
 end;
 
 function TMongoCursor.current: TBson;
@@ -405,25 +407,30 @@ end;
 
 function TMongoCursor.next: boolean;
 begin
-  Result := mongo_cursor_next(FHandle, FBson.PHandle);
+  Result := mongo_cursor_next(Handle, FBson.PHandle);
+ { if not Result then
+    mongo_cursor_destroy(FHandle); }
 end;
 
 destructor TMongoCursor.Destroy;
 begin
   FBson.Free;
-  mongo_cursor_destroy(FHandle);
   inherited;
 end;
 
 constructor TMongoCursor.Create;
 begin
+  if Assigned(FBson) then
+    FBson.Free;
   FBson := TBson.Create;
+  FHandle := nil;
 end;
 
 function TMongoCollection.find(flag: TQUERY_FLAGS; skip, limit,
   batch_size: Integer; const query, fields: TBson;
   read_prefs: PTReadPrefs): TMongoCursor;
 begin
+  //returned instance cursor should be freed
   Result := TMongoCursor.Create;
   find(Result, flag, skip, limit, batch_size, query, fields, read_prefs);
 end;
@@ -434,6 +441,29 @@ begin
   find(ACursor, QUERY_NONE, 0, limit, 0, query, nil, nil);
 end;
 
+procedure TMongoCursor.SetHandle(const Value: Pointer);
+begin
+  if Assigned(FHandle) then
+      mongo_cursor_destroy(FHandle);
+  FHandle := Value;
+end;
+
+procedure TMongoClient.SetHandle(const Value: Pointer);
+begin
+  if Assigned(FHandle) then
+      mongo_client_destroy(FHandle);
+  FHandle := Value;
+end;
+
+
+procedure TMongoCollection.SetHandle(const Value: Pointer);
+begin
+  if Assigned(FHandle) then
+      mongo_collection_destroy(FHandle);
+  FHandle := Value;
+end;
+
+
 initialization
   mongo_init;
 
@@ -441,3 +471,4 @@ finalization
   mongo_cleanup;
 
 end.
+
