@@ -32,6 +32,11 @@ type
      function has_field(key: string): boolean;
      function as_json: string;
 
+     procedure update_boolean(value: boolean);
+     procedure update_int(value: integer);
+     procedure update_int64(value: int64);
+     procedure update_double(value: double);
+
      function append_regex(key: string; regex: string; options: string): boolean;
      function append_symbol(key: string; value: string): boolean;
      function append_time(key: string; value: int64): boolean;
@@ -121,6 +126,11 @@ function bson_append_int64(document: Pointer; key: PChar; key_len: integer; valu
 function bson_append_minkey(document: Pointer; key: PChar; key_len: integer): boolean; cdecl; external BsonDll name 'bson_append_min_key';
 function bson_append_maxkey(document: Pointer; key: PChar;  key_len: integer): boolean; cdecl; external BsonDll name 'bson_append_max_key';
 function bson_append_null(document: Pointer; key: PChar; key_len: integer): boolean; cdecl; external BsonDll name 'bson_append_null';
+
+procedure bson_iter_overwrite_bool(document: Pointer; value: boolean); cdecl; external BsonDll name 'bson_iter_overwrite_bool';
+procedure bson_iter_overwrite_int32(document: Pointer; value: integer); cdecl; external BsonDll name 'bson_iter_overwrite_int32';
+procedure bson_iter_overwrite_int64(document: Pointer; value: int64); cdecl; external BsonDll name 'bson_iter_overwrite_int64';
+procedure bson_iter_overwrite_double(document: Pointer; value: double); cdecl; external BsonDll name 'bson_iter_overwrite_double';
 
 implementation
 
@@ -410,5 +420,26 @@ function TBson.GetPHandle: Pointer;
 begin
   Result := @FHandle;
 end;
+
+procedure TBson.update_boolean(value: boolean);
+begin
+  bson_iter_overwrite_bool(Handle, value);
+end;
+
+procedure TBson.update_int(value: integer);
+begin
+  bson_iter_overwrite_int32(Handle, value);
+end;
+
+procedure TBson.update_int64(value: int64);
+begin
+  bson_iter_overwrite_int64(Handle, value);
+end;
+
+procedure TBson.update_double(value: double);
+begin
+  bson_iter_overwrite_double(Handle, value);
+end;
+
 
 end.
