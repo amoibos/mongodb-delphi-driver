@@ -9,7 +9,9 @@ type
    TBsonFlags = (BSON_FLAG_NONE, BSON_FLAG_INLINE, BSON_FLAG_STATIC, BSON_FLAG_RDONLY,
               BSON_FLAG_CHILD, BSON_FLAG_IN_CHILD, BSON_FLAG_NO_FREE);
 
+
    TBsonOid = array[0..11] of byte;
+   PTBsonIOD = ^TBsonOid;
    TSubType = (TYPE_EOD, TYPE_DOUBLE, TYPE_TEXT, TYPE_DOCUMENT, TYPE_ARRAY, TYPE_BINARY, TYPE_UNDEFINED,
                TYPE_OID, TYPE_BOOL, TYPE_DATE_TIME, TYPE_NULL, TYPE_REGEX, TYPE_DBPOINTER, TYPE_CODE,
                TYPE_SYMBOL, TYPE_CODEWSCOPE, TYPE_INT32, TYPE_TIMESTAMP, TYPE_INT64{required special handling, TYPE_MAXKEY=7F, TYPE_MINKEY=0xFF});
@@ -118,6 +120,7 @@ type
     function int64: int64;
     function double: double;
     function boolean: boolean;
+    function oid: TBsonOid;
 
     procedure update_boolean(value: boolean);
     procedure update_int(value: integer);
@@ -172,7 +175,6 @@ function bson_append_int64(document: Pointer; key: PChar; key_len: integer; valu
 function bson_append_minkey(document: Pointer; key: PChar; key_len: integer): boolean; cdecl; external BsonDll name 'bson_append_min_key';
 function bson_append_maxkey(document: Pointer; key: PChar;  key_len: integer): boolean; cdecl; external BsonDll name 'bson_append_max_key';
 function bson_append_null(document: Pointer; key: PChar; key_len: integer): boolean; cdecl; external BsonDll name 'bson_append_null';
-
 //iterator functions
 function bson_iter_init(AIter: Pointer; document: Pointer): Boolean; cdecl; external BsonDll name 'bson_iter_init';
 function bson_iter_next(AIter: Pointer): Boolean; cdecl; external BsonDll name 'bson_iter_next';
@@ -186,6 +188,7 @@ function bson_iter_document(AIter: Pointer; len: integer; document: Pointer): do
 function bson_iter_code(AIter: Pointer; len: integer): PChar; cdecl; external BsonDll name 'bson_iter_code';
 function bson_iter_boolean(AIter: Pointer): boolean; cdecl; external BsonDll name 'bson_iter_bool';
 function bson_iter_double(AIter: Pointer): double; cdecl; external BsonDll name 'bson_iter_double';
+function bson_iter_oid(AIter: Pointer): PTBsonIOD; cdecl; external BsonDll name 'bson_iter_oid';
 function bson_iter_init_find(AIter: Pointer; document: Pointer; field: PChar): boolean; external BsonDll name 'bson_iter_init_find';
 
 procedure bson_iter_overwrite_bool(document: Pointer; value: boolean); cdecl; external BsonDll name 'bson_iter_overwrite_bool';
@@ -565,6 +568,11 @@ end;
 function TBsonIterator.int: integer;
 begin
   Result := bson_iter_int(@FIterStruct);
+end;
+
+function TBsonIterator.oid: TBsonOid;
+begin
+  Result := bson_iter_oid(@FIterStruct)^;
 end;
 
 function TBsonIterator.int64: int64;
